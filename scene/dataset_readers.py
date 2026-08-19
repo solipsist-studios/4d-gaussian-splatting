@@ -125,7 +125,7 @@ def fetchPly(path):
     else:
         normals = np.zeros_like(positions)
     if 'time' in vertices:
-        timestamp = vertices['time'][:, None]
+        timestamp = np.ascontiguousarray(vertices['time']).astype(np.float32)[:, None]
     else:
         timestamp = None
     return BasicPointCloud(points=positions, colors=colors, normals=normals, time=timestamp)
