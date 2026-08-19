@@ -31,8 +31,17 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         pass
 
     # Set up rasterization configuration
-    tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
-    tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
+    if getattr(viewpoint_camera, "fl_x", -1) > 0:
+        # FoVx/FoVy carry a -1 sentinel when per-camera fl/cx/cy intrinsics
+        # are in use (dataset_readers sets FovX = FovY = -1.0), which fed
+        # tan(-0.5) into the rasterizer and inflated every EWA footprint by
+        # ~tan(true_half_fov)/tan(0.5). Derive the true tangents from the
+        # focal instead (fl_x/image_width are both at the loaded resolution).
+        tanfovx = viewpoint_camera.image_width / (2.0 * viewpoint_camera.fl_x)
+        tanfovy = viewpoint_camera.image_height / (2.0 * viewpoint_camera.fl_y)
+    else:
+        tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
+        tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
 
     raster_settings = GaussianRasterizationSettings(
         image_height=int(viewpoint_camera.image_height),

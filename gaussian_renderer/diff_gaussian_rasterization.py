@@ -16,16 +16,29 @@ import torch
 import os
 from torch.utils.cpp_extension import load
 parent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "diff-gaussian-rasterization")
-_C = load(
-    name='diff_gaussian_rasterization',
-    extra_cuda_cflags=["-I " + os.path.join(parent_dir, "third_party/glm/"), "-g"],
-    sources=[
-        os.path.join(parent_dir, "cuda_rasterizer/rasterizer_impl.cu"),
-        os.path.join(parent_dir, "cuda_rasterizer/forward.cu"),
-        os.path.join(parent_dir, "cuda_rasterizer/backward.cu"),
-        os.path.join(parent_dir, "rasterize_points.cu"),
-        os.path.join(parent_dir, "ext.cpp")],
-    verbose=True)
+# The system CUDA moved to 13.2 (libcu++ needs C++17) which this py3.7 /
+# torch 1.12 env cannot JIT-compile against, so prefer the known-good cached
+# build from the cu116 era. All CUDA sources predate the cached .so, so it is
+# current; delete the cache dir to force a JIT rebuild after source changes.
+_cached_so = os.path.expanduser(
+    "~/.cache/torch_extensions/py37_cu116/diff_gaussian_rasterization/"
+    "diff_gaussian_rasterization.so")
+if os.path.exists(_cached_so):
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("diff_gaussian_rasterization", _cached_so)
+    _C = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_C)
+else:
+    _C = load(
+        name='diff_gaussian_rasterization',
+        extra_cuda_cflags=["-I " + os.path.join(parent_dir, "third_party/glm/"), "-g"],
+        sources=[
+            os.path.join(parent_dir, "cuda_rasterizer/rasterizer_impl.cu"),
+            os.path.join(parent_dir, "cuda_rasterizer/forward.cu"),
+            os.path.join(parent_dir, "cuda_rasterizer/backward.cu"),
+            os.path.join(parent_dir, "rasterize_points.cu"),
+            os.path.join(parent_dir, "ext.cpp")],
+        verbose=True)
 
 def cpu_deep_copy_tuple(input_tuple):
     copied_tensors = [item.cpu().clone() if isinstance(item, torch.Tensor) else item for item in input_tuple]

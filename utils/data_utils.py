@@ -17,6 +17,18 @@ class CameraDataset(Dataset):
         viewpoint_cam = self.viewpoint_stack[index]
         if viewpoint_cam.meta_only:
             with Image.open(viewpoint_cam.image_path) as image_load:
+                if image_load.size == tuple(viewpoint_cam.resolution):
+                    # Fast path: same-size image, composite over bg in torch
+                    # float32 (single fused pass) instead of the float64 numpy
+                    # chain below, which costs ~1-2 CPU-seconds per 4K frame
+                    # and leaves the GPU idle. Numerically it only skips the
+                    # old path uint8 re-quantisation of the composite.
+                    im = torch.from_numpy(
+                        np.asarray(image_load.convert("RGBA"), dtype=np.uint8).copy())
+                    t = im.permute(2, 0, 1).float().div_(255.0)
+                    a = t[3:4]
+                    bg = torch.tensor(self.bg, dtype=torch.float32).view(3, 1, 1)
+                    return (t[:3] * a + bg * (1.0 - a)).clamp_(0.0, 1.0), viewpoint_cam
                 im_data = np.array(image_load.convert("RGBA"))
             norm_data = im_data / 255.0
             arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + self.bg * (1 - norm_data[:, :, 3:4])
