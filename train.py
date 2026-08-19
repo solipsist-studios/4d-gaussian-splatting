@@ -12,6 +12,8 @@
 import os
 import random
 import torch
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 from torch import nn
 from utils.loss_utils import l1_loss, ssim, msssim
 from gaussian_renderer import render
