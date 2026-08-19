@@ -277,7 +277,11 @@ class GaussianModel:
         rots[:, 0] = 1
         if self.gaussian_dim == 4:
             # dist_t = torch.clamp_min(distCUDA2(fused_times.repeat(1,3)), 1e-10)[...,None]
-            dist_t = torch.zeros_like(fused_times, device="cuda") + (self.time_duration[1] - self.time_duration[0]) / 5
+            # GS4D_T_INIT_DIV: initial t-sigma = sqrt(duration/div). Upstream default 5
+            # (sigma ~0.85s for a 3.6s clip) is far too wide for 24fps human motion
+            # and bakes in temporal smear; override via env for short clips.
+            t_init_div = float(os.environ.get("GS4D_T_INIT_DIV", "5"))
+            dist_t = torch.zeros_like(fused_times, device="cuda") + (self.time_duration[1] - self.time_duration[0]) / t_init_div
             scales_t = torch.log(torch.sqrt(dist_t))
             if self.rot_4d:
                 rots_r = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
